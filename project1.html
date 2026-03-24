@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Encryption Tool - Keamanan Sistem</title>
+  <script src="script.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <h1><span>🔐</span> Encryption Tools</h1>
+
+  <div class="info-box">
+    <strong>Panduan Keamanan:</strong>
+    <ul>
+      <li><b>Kunci/Key:</b> Minimal <b>8 karakter</b> (Case-sensitive). Akan di-pad menjadi 16 byte otomatis.</li>
+      <li><b>IV (Initialization Vector):</b> Minimal <b>10 angka/karakter</b>. Jika kurang, sistem menggunakan IV bawaan.</li>
+      <li><b>IV </b> digunakan untuk mode selain ECB. IV yang sama harus digunakan untuk enkripsi dan dekripsi.</li>
+      <li>Pastikan <b>IV dan Mode</b> yang digunakan saat dekripsi sama persis dengan saat enkripsi.</li>
+    </ul>
+  </div>
+
+  <form onsubmit="return false;">
+    <div class="form-group">
+      <label for="text">Teks / Pesan</label>
+      <textarea id="text" placeholder="Masukkan teks rahasia di sini..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="key">Kunci Rahasia (Key)</label>
+      <input type="password" id="key" placeholder="Contoh: p4ssw0rdKuat!">
+    </div>
+
+    <div class="form-group">
+      <label for="iv">Initialization Vector <span class="optional-text">(Opsional, Minimal 10 Karakter)</span></label>
+      <input type="password" id="iv" placeholder="Kosongkan untuk IV default">
+    </div>
+
+    <div class="form-group">
+      <label for="mode">Mode Algoritma</label>
+      <select id="mode" onchange="showCipherDesc()">
+        <option value="CBC">CBC - Cipher Block Chaining (Rekomendasi)</option>
+        <option value="ECB">ECB - Electronic Code Book</option>
+        <option value="CFB">CFB - Cipher Feedback</option>
+        <option value="OFB">OFB - Output Feedback</option>
+      </select>
+    </div>
+
+    <div class="cipher-desc" id="cipher-desc"></div>
+
+    <div class="buttons">
+      <button class="btn-encrypt" type="button" onclick="encrypt()">
+        🔒 Enkripsi
+      </button>
+      <button class="btn-decrypt" type="button" onclick="decrypt()">
+        🔓 Dekripsi
+      </button>
+    </div>
+
+    <div class="form-group">
+      <label for="result">Output Hasil</label>
+      <textarea id="result" readonly placeholder="Hasil proses akan muncul di sini..."></textarea>
+    </div>
+  </form>
+
+  <footer>
+    Project Keamanan Sistem • <span>Muhammad Afif Anwar</span>
+  </footer>
+</div>
+
+<script>
+const cipherDescriptions = {
+  "ECB": "ECB: Blok teks dienkripsi terpisah. Kurang aman untuk data berpola.",
+  "CBC": "CBC: Blok terenkripsi dipengaruhi blok sebelumnya. Standar keamanan tinggi.",
+  "CFB": "CFB: Setiap blok ciphertext digunakan kembali, mode modern dan lebih aman (memerlukan IV).",
+  "OFB": "OFB: Mode feedback berbasis output, cocok untuk stream encryption (memerlukan IV)."
+};
+
+function showCipherDesc() {
+  const mode = document.getElementById("mode").value;
+  document.getElementById("cipher-desc").textContent = cipherDescriptions[mode];
+}
+
+function getMode(mode){
+  let modeUp = (mode || '').toUpperCase();
+  if (["ECB","CBC","CFB","OFB"].includes(modeUp)) return modeUp;
+  return "CBC";
+}
+
+function getIV(mode) {
+  const upperMode = (mode || "").toUpperCase();
+  if (upperMode === "ECB") return undefined;
+  let ivField = document.getElementById("iv");
+  let ivValue = ivField ? ivField.value : "";
+
+  if (!ivValue || ivValue.length < 10) {
+    if (ivValue.length > 0 && ivValue.length < 10) {
+      alert("Peringatan: IV minimal 10 karakter. Sistem akan menggunakan IV default.");
+    }
+    return "1234567890123456";
+  }
+  let paddedIV = ivValue.padEnd(16, "0").substring(0, 16);
+  return paddedIV;
+}
+
+function padPKCS7(msg, block) {
+  const padlen = block - (msg.length % block);
+  return msg + String.fromCharCode(padlen).repeat(padlen);
+}
+function unpadPKCS7(msg, block) {
+  if (!msg || msg.length === 0) return msg;
+  const padlen = msg.charCodeAt(msg.length-1);
+  if(padlen<1||padlen>block) return msg;
+  return msg.slice(0, -padlen);
+}
+
+function encrypt() {
+  let text = document.getElementById("text").value;
+  let key = document.getElementById("key").value;
+  let mode = document.getElementById("mode").value;
+  let resultField = document.getElementById("result");
+  let iv = getIV(mode);
+
+  if (!text.trim()) {
+    resultField.value = "⚠️ Error: Teks tidak boleh kosong.";
+    resultField.style.color = "var(--danger-color)";
+    return;
+  }
+  if (key.trim().length < 8) {
+    resultField.value = "⚠️ Error: Kunci minimal 8 karakter.";
+    resultField.style.color = "var(--danger-color)";
+    return;
+  }
+
+  resultField.style.color = "var(--primary-color)";
+
+  let paddedKey = key.padEnd(16,"0").substring(0,16);
+  let aesOpts = {
+    mode: getMode(mode),
+    iv: iv
+  };
+
+  let plain = text;
+  if(aesOpts.mode==="ECB"||aesOpts.mode==="CBC") {
+    plain = padPKCS7(plain, 16);
+  }
+  try {
+    let cipherB64 = AESLite.encrypt(plain, paddedKey, { mode: aesOpts.mode, iv: aesOpts.iv });
+    resultField.value = cipherB64;
+  } catch(e) {
+    resultField.value = "⚠️ Terjadi kesalahan saat enkripsi: " + (e.message || e.toString());
+    resultField.style.color = "var(--danger-color)";
+  }
+}
+
+function decrypt() {
+  let text = document.getElementById("text").value;
+  let key = document.getElementById("key").value;
+  let mode = document.getElementById("mode").value;
+  let resultField = document.getElementById("result");
+  let iv = getIV(mode);
+
+  if (!text.trim()) {
+    resultField.value = "⚠️ Error: Masukkan ciphertext.";
+    resultField.style.color = "var(--danger-color)";
+    return;
+  }
+  if (key.trim().length < 8) {
+    resultField.value = "⚠️ Error: Kunci minimal 8 karakter.";
+    resultField.style.color = "var(--danger-color)";
+    return;
+  }
+  resultField.style.color = "var(--primary-color)";
+
+  let paddedKey = key.padEnd(16,"0").substring(0,16);
+  let aesOpts = {
+    mode: getMode(mode),
+    iv: iv
+  };
+
+  try {
+    let decrypted = AESLite.decrypt(text, paddedKey, { mode: aesOpts.mode, iv: aesOpts.iv });
+    let output = decrypted;
+    if(aesOpts.mode==="ECB"||aesOpts.mode==="CBC") {
+      output = unpadPKCS7(decrypted, 16);
+    }
+    if (!output) throw new Error("Kunci salah atau data korup");
+    resultField.value = output;
+  } catch (e) {
+    resultField.value = "⚠️ Dekripsi gagal. Kunci, Mode, atau IV tidak cocok! ("+(e.message||e.toString())+")";
+    resultField.style.color = "var(--danger-color)";
+  }
+}
+
+window.addEventListener('DOMContentLoaded', showCipherDesc);
+</script>
+</body>
+</html>
